@@ -1,0 +1,3 @@
+<settings>
+  <setting id="vid_quality" type="enum" label="30001" lvalues="30002|30003" default="0"/>
+</settings>
