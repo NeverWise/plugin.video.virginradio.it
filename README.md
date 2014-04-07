@@ -1,7 +1,9 @@
 plugin.virginradio
 ==================
 
-XBMC plugin for Virgin Radio
+XBMC plugin for Virgin Radio (tested on XBMC 12.3 Frodo)
 
-To run this addon you need to download script.neverwise at this address https://github.com/NeverWise/script.neverwise.
-If it still doesn't work you need to download Parsedom at this address http://addons.xbmc.org/show/script.module.parsedom.
+You may need to download the dependencies of this addon:
+- script.neverwise 1.0.1 (https://github.com/NeverWise/script.neverwise/archive/master.zip)
+- script.module.beautifulsoup 3.2.1 (http://mirrors.xbmc.org/addons/frodo/script.module.beautifulsoup/script.module.beautifulsoup-3.2.1.zip)
+- script.module.parsedom 2.5.2 (http://mirrors.xbmc.org/addons/frodo/script.module.parsedom/script.module.parsedom-2.5.2.zip)

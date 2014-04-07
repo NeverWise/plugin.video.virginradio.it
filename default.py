@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-# Version 1.0.0 (18/08/2013)
+# Version 1.0.1 (18/08/2013)
 # Virgin Radio (Style Rock Television)
 # <description>
 # By NeverWise
@@ -27,10 +27,13 @@ def getVirginResponse(link):
 
 
 def getStreamParam(quality):
+  result = None
   response = tools.getResponseUrl('http://video.virginradioitaly.it/com/universalmind/tv/virgin/videoXML.xml')
-  serverParam = re.compile('<serverPath value="auto\|(.+?)\|(.+?)"/>').findall(response)
-  stream = re.compile('<rate n="' + str(quality) + '" streamName="(.+?)" bitrate="').findall(response)
-  return [serverParam[0][0], serverParam[0][1], stream[0]]
+  if response != None:
+    serverParam = re.compile('<serverPath value="auto\|(.+?)\|(.+?)"/>').findall(response)
+    stream = re.compile('<rate n="' + str(quality) + '" streamName="(.+?)" bitrate="').findall(response)
+    result = [serverParam[0][0], serverParam[0][1], stream[0]]
+  return result
 
 
 def isExtensionNumber(extension):
@@ -65,12 +68,13 @@ def showNextPageDir(inputString, pattern, idParams):
 
 def getWebRadio(url):
   response = getVirginResponse(url)
-  rList = re.compile('<img width="70" height="70" src="(.+?)".+?/> <a href="(.+?)">(.+?)</a> <p><p>(.+?)</p>').findall(response)
-  for img, link, title, descr in rList:
-    img = img.replace('-70x70', '')
-    title = tools.normalizeText(title)
-    tools.addDir(handle, title, img, '', 'music', { 'title' : title, 'plot' : tools.normalizeText(descr), 'duration' : -1, 'director' : '' }, { 'id' : 'r', 'page' : link.replace('http://www.virginradio.it', '') })
-  showNextPageDir(response, "<span class='page-numbers current'>.+?</span><a class='page-numbers' href='(.+?)'>(.+?)</a>", 't')
+  if response != None:
+    rList = re.compile('<img width="70" height="70" src="(.+?)".+?/> <a href="(.+?)">(.+?)</a> <p><p>(.+?)</p>').findall(response)
+    for img, link, title, descr in rList:
+      img = img.replace('-70x70', '')
+      title = tools.normalizeText(title)
+      tools.addDir(handle, title, img, '', 'music', { 'title' : title, 'plot' : tools.normalizeText(descr), 'duration' : -1, 'director' : '' }, { 'id' : 'r', 'page' : link.replace('http://www.virginradio.it', '') })
+    showNextPageDir(response, "<span class='page-numbers current'>.+?</span><a class='page-numbers' href='(.+?)'>(.+?)</a>", 't')
   xbmcplugin.endOfDirectory(handle)
 
 
@@ -83,37 +87,39 @@ idPlugin = 'plugin.virginradio'
 
 if params.get('content_type') is None: # Visualizzo i video della sezione.
   response = getVirginResponse(params['page'])
-  if params['id'] == 's': # Video di una categoria.
-    videos = re.compile('<figure> <a href="(.+?)" title=".+?">.+?<img src="(.+?)".+?> </a> </figure> <header> <a href=".+?" title=".+?"> <h3>(.+?)</h3> </a> </header> <div.+?>(.+?)</div>').findall(response)
-    for link, img, title, descr in videos:
-      img = normalizeImageUrl(img)
-      descr = tools.normalizeText(descr)
-      title = tools.normalizeText(title)
-      tools.addDir(handle, title, img, '', 'video', { 'title' : title, 'plot' : descr, 'duration' : -1, 'director' : '' }, { 'id' : 'v', 'page' : link })
-    showNextPageDir(response, '[0-9]+ <a rel="nofollow" href="(.+?)">(.+?)</a>', 's')
-    xbmcplugin.endOfDirectory(handle)
-  elif params['id'] == 'v': # Riproduzione di un video.
-    if response.find('<title>Virgin Radio Tv</title>') == -1: # Per evitare i video non funzionanti.
-      title = tools.normalizeText(re.compile('<meta property="og:title" content="(.+?)"').findall(response)[0])
-      img = normalizeImageUrl(re.compile('<meta property="og:image" content="(.+?)"').findall(response)[0])
-      descr = re.compile('<meta property="og:description" content="(.+?)"').findall(response)[0]
-      play = re.compile('clip:\{"url":"(.+?):(.+?)"').findall(response)
-      server = re.compile('"hddn":\{"url":"(.+?)","netConnectionUrl":"rtmp:\\\/\\\/(.+?)\\\/(.+?)"\},"').findall(response)
-      playBS = play[0][1].replace('\\', '')
-      li = tools.createListItem(title, img, '', 'video', { 'title' : title, 'plot' : tools.normalizeText(descr), 'duration' : -1, 'director' : '' })
-      xbmc.Player(xbmc.PLAYER_CORE_MPLAYER).playStream('rtmp://' + server[0][1] + ':1935/' + server[0][2] + '/' + playBS + ' app=' + server[0][2] + ' playpath=' + play[0][0] + ':' + playBS + ' swfUrl=' + server[0][0].replace('\\', '') + ' pageURL=http://www.virginradio.it swfVfy=true live=false flashVer=LNX 10,1,82,76', li)
-    else: # Messaggio d'errore "Video non disponibile".
-      xbmcgui.Dialog().ok('Virgin Radio', tools.getTranslation(idPlugin, 30006))
-  elif params['id'] == 't':
-    getWebRadio(params['page'])
-  elif params['id'] == 'r': # Riproduzione di una radio.
-    title = tools.normalizeText(re.compile('<div class="seo-strip clearfix"> <header> <h1>(.+?)</h1>').findall(response)[0])
-    img = re.compile("<meta property='og:image' content='(.+?)'").findall(response)[0]
-    descr = re.compile("<meta property='og:description' content='(.+?)'").findall(response)[0]
-    streamParam = getStreamParam(1)
-    params = re.compile('<param name="movie" value="http://www\.virginradio\.it/wp-content/themes/wirgin/corePlayerStreamingVisible2013_counter_VIRGIN\.swf\?streamRadio=(.+?)&amp;radioName=(.+?)&amp;autoPlay=1&amp;bufferTime=2\.5&amp;rateServer=37\.247\.51\.47">(.+?)<p>(.+?)</div>').findall(response)
-    li = tools.createListItem(title, img, '', 'music', { 'title' : title, 'plot' : tools.normalizeText(descr), 'duration' : -1, 'director' : '' })
-    xbmc.Player(xbmc.PLAYER_CORE_MPLAYER).playStream('rtmp://' + streamParam[0] + ':1935/' + streamParam[1] + '/' + params[0][0] + ' app=' + streamParam[1] + ' playpath=' + params[0][0] + ' swfUrl=http://www.virginradio.it/wp-content/themes/wirgin/corePlayerStreamingVisible2013_counter_VIRGIN.swf?streamRadio=' + params[0][0] + '&radioName=' + params[0][1].replace(' ', '%20') + '&autoPlay=1&bufferTime=2.5&rateServer=37.247.51.47 pageURL=http://www.virginradio.it swfVfy=true live=true timeout=30 flashVer=LNX 11,2,202,297', li)
+  if response != None:
+    if params['id'] == 's': # Video di una categoria.
+      videos = re.compile('<figure> <a href="(.+?)" title=".+?">.+?<img src="(.+?)".+?> </a> </figure> <header> <a href=".+?" title=".+?"> <h3>(.+?)</h3> </a> </header> <div.+?>(.+?)</div>').findall(response)
+      for link, img, title, descr in videos:
+        img = normalizeImageUrl(img)
+        descr = tools.normalizeText(descr)
+        title = tools.normalizeText(title)
+        tools.addDir(handle, title, img, '', 'video', { 'title' : title, 'plot' : descr, 'duration' : -1, 'director' : '' }, { 'id' : 'v', 'page' : link })
+      showNextPageDir(response, '[0-9]+ <a rel="nofollow" href="(.+?)">(.+?)</a>', 's')
+      xbmcplugin.endOfDirectory(handle)
+    elif params['id'] == 'v': # Riproduzione di un video.
+      if response.find('<title>Virgin Radio Tv</title>') == -1: # Per evitare i video non funzionanti.
+        title = tools.normalizeText(re.compile('<meta property="og:title" content="(.+?)"').findall(response)[0])
+        img = normalizeImageUrl(re.compile('<meta property="og:image" content="(.+?)"').findall(response)[0])
+        descr = re.compile('<meta property="og:description" content="(.+?)"').findall(response)[0]
+        play = re.compile('clip: \{"url":"(.+?):(.+?)"').findall(response)
+        server = re.compile('"hddn":\{"url":"(.+?)","netConnectionUrl":"rtmp:\\\/\\\/(.+?)\\\/(.+?)"\},"').findall(response)
+        playBS = play[0][1].replace('\\', '')
+        li = tools.createListItem(title, img, '', 'video', { 'title' : title, 'plot' : tools.normalizeText(descr), 'duration' : -1, 'director' : '' })
+        xbmc.Player(xbmc.PLAYER_CORE_MPLAYER).playStream('rtmp://' + server[0][1] + ':1935/' + server[0][2] + '/' + playBS + ' app=' + server[0][2] + ' playpath=' + play[0][0] + ':' + playBS + ' swfUrl=' + server[0][0].replace('\\', '') + ' pageURL=http://www.virginradio.it swfVfy=true live=false flashVer=LNX 10,1,82,76', li)
+      else: # Messaggio d'errore "Video non disponibile".
+        xbmcgui.Dialog().ok('Virgin Radio', tools.getTranslation(idPlugin, 30006))
+    elif params['id'] == 't':
+      getWebRadio(params['page'])
+    elif params['id'] == 'r': # Riproduzione di una radio.
+      streamParam = getStreamParam(1)
+      if streamParam != None:
+        title = tools.normalizeText(re.compile('<div class="seo-strip clearfix"> <header> <h1>(.+?)</h1>').findall(response)[0])
+        img = re.compile("<meta property='og:image' content='(.+?)'").findall(response)[0]
+        descr = re.compile("<meta property='og:description' content='(.+?)'").findall(response)[0]
+        params = re.compile('<param name="movie" value="/wp-content/themes/wirgin/swf//corePlayerStreamingVisible2014_Virgin\.swf\?streamRadio=(.+?)&radioName=(.+?)&.+?>').findall(response)
+        li = tools.createListItem(title, img, '', 'music', { 'title' : title, 'plot' : tools.normalizeText(descr), 'duration' : -1, 'director' : '' })
+        xbmc.Player(xbmc.PLAYER_CORE_MPLAYER).playStream('rtmp://' + streamParam[0] + ':1935/' + streamParam[1] + '/' + params[0][0] + ' app=' + streamParam[1] + ' playpath=' + params[0][0] + ' swfUrl=http://www.virginradio.it/wp-content/themes/wirgin/corePlayerStreamingVisible2013_counter_VIRGIN.swf?streamRadio=' + params[0][0] + '&radioName=' + params[0][1].replace(' ', '%20') + '&autoPlay=1&bufferTime=2.5&rateServer=37.247.51.47 pageURL=http://www.virginradio.it swfVfy=true live=true timeout=30 flashVer=LNX 11,2,202,297', li)
 elif params['content_type'] == 'video': # Diretta e categorie video.
   categs = []
   categs.append(['Virgin Radio TV', 'Guarda i migliori videoclip del canale Virgin Radio TV', '/video-canale/channel/1'])
@@ -132,11 +138,13 @@ elif params['content_type'] == 'video': # Diretta e categorie video.
   categs.append(['Litfiba Contest', 'Guarda i migliori videoclip del canale Litfiba Contest', '/video-canale/channel/20'])
   qlty = int(xbmcplugin.getSetting(handle, 'vid_quality')) + 1
   streamParam = getStreamParam(qlty)
-  response = tools.getResponseUrl('http://www.virginradio.it/video')
-  descr = tools.normalizeText(tools.stripTags(re.compile('<aside> <p>(.+?)</p> </aside>').findall(response)[0]))
-  title = tools.normalizeText(re.compile('<span class="h2Wrapper" style="font-size: 36px;">(.+?)</span>').findall(response)[0])
-  img = os.path.dirname(os.path.abspath(__file__)) + '/resources/images/VirginRadioTV.png'
-  tools.addLink(handle, tools.getTranslation(idPlugin, 30004), img, '', 'video', { 'title' : title, 'plot' : descr, 'duration' : -1, 'director' : '' }, 'rtmp://' + streamParam[0] + ':1935/' + streamParam[1] + '/' + streamParam[2] + ' app=' + streamParam[1] + ' playpath=' + streamParam[2] + ' swfUrl=http://video.virginradioitaly.it/com/universalmind/swf/video_player_102.swf?xmlPath=http://video.virginradioitaly.it/com/universalmind/tv/virgin/videoXML.xml&advXML=http://video.virginradioitaly.it/com/universalmind/adsWizzConfig/1.xml pageURL=http://www.virginradio.it swfVfy=true live=true timeout=30 flashVer=LNX 11,2,202,297') # Diretta.
+  if streamParam != None:
+    response = tools.getResponseUrl('http://www.virginradio.it/video')
+    if response != None:
+      descr = tools.normalizeText(tools.stripTags(re.compile('<aside> <p>(.+?)</p> </aside>').findall(response)[0]))
+      title = tools.normalizeText(re.compile('<span class="h2Wrapper" style="font-size: 36px;">(.+?)</span>').findall(response)[0])
+      img = os.path.dirname(os.path.abspath(__file__)) + '/resources/images/VirginRadioTV.png'
+      tools.addLink(handle, tools.getTranslation(idPlugin, 30004), img, '', 'video', { 'title' : title, 'plot' : descr, 'duration' : -1, 'director' : '' }, 'rtmp://' + streamParam[0] + ':1935/' + streamParam[1] + '/' + streamParam[2] + ' app=' + streamParam[1] + ' playpath=' + streamParam[2] + ' swfUrl=http://video.virginradioitaly.it/com/universalmind/swf/video_player_102.swf?xmlPath=http://video.virginradioitaly.it/com/universalmind/tv/virgin/videoXML.xml&advXML=http://video.virginradioitaly.it/com/universalmind/adsWizzConfig/1.xml pageURL=http://www.virginradio.it swfVfy=true live=true timeout=30 flashVer=LNX 11,2,202,297') # Diretta.
   for nameCat, descr, link in categs:
     tools.addDir(handle, nameCat, '', '', 'video', { 'title' : nameCat, 'plot' : descr, 'duration' : -1, 'director' : '' }, { 'id' : 's', 'page' : link })
   xbmcplugin.endOfDirectory(handle)
