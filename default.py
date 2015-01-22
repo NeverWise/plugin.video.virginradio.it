@@ -1,6 +1,5 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
-import sys, os, re, xbmcgui, xbmcplugin#, datetime
+import re, sys, os, xbmcplugin, xbmcgui#, datetime
 from neverwise import Util
 
 
@@ -13,26 +12,31 @@ class VirginRadio(object):
 
     # Visualizzo i video della sezione.
     if self._params.get('content_type') is None:
-      response = self._getVirginResponse(self._params['page'])
+      response = self._getVirginResponse(self._params['page'], True)
       if response != None:
 
         # Video di una categoria.
         if self._params['id'] == 's':
-          videos = re.compile('<figure> <a href="(.+?)" title=".+?">.+?<img src="(.+?)".+?> </a> </figure> <header> <a href=".+?" title=".+?"> <h3>(.+?)</h3> </a> </header> <div.+?>(.+?)</div>').findall(response)
-          items = []
-          for link, img, title, descr in videos:
-            title = Util.normalizeText(title)
-            li = Util.createListItem(title, thumbnailImage = self._normalizeImageUrl(img), streamtype = 'video', infolabels = { 'title' : title, 'plot' : Util.normalizeText(descr) }, isPlayable = True)
-            items.append([{ 'id' : 'v', 'page' : link }, li, False, True])
-          self._showNextPageDir(response, '[0-9]+ <a rel="nofollow" href="(.+?)">(.+?)</a>', 's', items)
-          Util.addItems(self._handle, items)
+          videos = response.findAll('article', 'casgin')
+          for video in videos:
+            title = Util.normalizeText(video.h3.text)
+            imgs = video.findAll('img')
+            img = imgs[0]['src']
+            if img == '/wp-content/themes/wirgin/images/video-new.png':
+              title += ' (NEW)'
+              img = imgs[1]['src']
+            li = Util.createListItem(title, thumbnailImage = self._normalizeImageUrl(img), streamtype = 'video', infolabels = { 'title' : title, 'plot' : Util.normalizeText(video.div.text) }, isPlayable = True)
+            xbmcplugin.addDirectoryItem(self._handle, Util.formatUrl({ 'id' : 'v', 'page' : video.a['href'] }), li, False)
+          self._showNextPageDir(response.renderContents(), '[0-9]+ <a rel="nofollow" href="(.+?)">(.+?)</a>', 's')
+          xbmcplugin.endOfDirectory(self._handle)
 
         # Riproduzione di un video.
         elif self._params['id'] == 'v':
-          if response.find('<title>Virgin Radio Tv</title>') == -1: # Per evitare i video non funzionanti.
-            title = Util.normalizeText(re.compile('<meta property="og:title" content="(.+?)"').findall(response)[0])
-            img = self._normalizeImageUrl(re.compile('<meta property="og:image" content="(.+?)"').findall(response)[0])
-            descr = re.compile('<meta property="og:description" content="(.+?)"').findall(response)[0]
+          if response.find('title').text != 'Virgin Radio Tv': # Per evitare i video non funzionanti.
+            title = Util.normalizeText(response.find('meta', { 'property' : 'og:title' })['content'])
+            img = self._normalizeImageUrl(response.find('meta', { 'property' : 'og:image' })['content'])
+            descr = response.find('meta', { 'property' : 'og:description' })['content']
+            response = response.renderContents()
             play = re.compile('clip: \{"url":"(.+?):(.+?)"').findall(response)
             server = re.compile('"hddn":\{"url":"(.+?)","netConnectionUrl":"rtmp:\\\/\\\/(.+?)\\\/(.+?)"\},"').findall(response)
             playBS = play[0][1].replace('\\', '')
@@ -48,14 +52,11 @@ class VirginRadio(object):
         elif self._params['id'] == 'r':
           streamParam = self._getStreamParam(1)
           if streamParam != None:
-            title = Util.normalizeText(re.compile('<div class="seo-strip clearfix"> <header> <h1>(.+?)</h1>').findall(response)[0])
-            img = re.compile("<meta property='og:image' content='(.+?)'").findall(response)[0]
-            #descr = re.compile("<meta property='og:description' content='(.+?)'").findall(response)[0]
-            params = re.compile('<param name="movie" value="/wp-content/themes/wirgin/swf//corePlayerStreamingVisible2014_Virgin\.swf\?streamRadio=(.+?)&radioName=(.+?)&.+?>').findall(response)
+            title = Util.normalizeText(response.find('div', 'seo-strip clearfix').h1.text)
+            img = response.find('meta', {'property' : 'og:image'})['content']
+            #descr = response.find('meta', {'property' : 'og:description'})['content']
+            params = re.compile('streamRadio=(.+?)&radioName=(.+?)&').findall(response.find('param', {'name' : 'movie'})['value'])
             Util.playStream(self._handle, title, img, 'rtmp://{0}:1935/{1}/{2} app={1} playpath={2} swfUrl=http://www.virginradio.it/wp-content/themes/wirgin/corePlayerStreamingVisible2013_counter_VIRGIN.swf?streamRadio={2}&radioName={3}&autoPlay=1&bufferTime=2.5&rateServer=37.247.51.47 pageURL=http://www.virginradio.it swfVfy=true live=true timeout=30 flashVer=LNX 11,2,202,297'.format(streamParam[0], streamParam[1], params[0][0], params[0][1].replace(' ', '%20')), 'music', { 'title' : title })
-
-      else:
-        Util.showConnectionErrorDialog() # Errore connessione internet!
 
     # Diretta e categorie video.
     elif self._params['content_type'] == 'video':
@@ -76,45 +77,42 @@ class VirginRadio(object):
       categs.append(['Litfiba Contest', 'Guarda i migliori videoclip del canale Litfiba Contest', '/video-canale/channel/20'])
       qlty = int(xbmcplugin.getSetting(self._handle, 'vid_quality')) + 1
       streamParam = self._getStreamParam(qlty)
-      items = []
       if streamParam != None:
         response = self._getVirginResponse('/video')
         if response != None:
-          descr = Util.normalizeText(Util.trimTags(re.compile('<aside> <p>(.+?)</p> </aside>').findall(response)[0]))
-          title = Util.normalizeText(re.compile('<span class="h2Wrapper" style="font-size: 36px;">(.+?)</span>').findall(response)[0])
+          descr = Util.normalizeText(Util.trimTags(response.find('figcaption').parent.nextSibling.text))
+          title = Util.normalizeText(response.find('span', 'h2Wrapper').text)
           img = '{0}/resources/images/VirginRadioTV.png'.format(os.path.dirname(os.path.abspath(__file__)))
           li = Util.createListItem(Util.getTranslation(30003), thumbnailImage = img, streamtype = 'video', infolabels = { 'title' : title, 'plot' : descr }) # Diretta.
-          items.append(['rtmp://{0}:1935/{1}/{2} app={1} playpath={2} swfUrl=http://video.virginradioitaly.it/com/universalmind/swf/video_player_102.swf?xmlPath=http://video.virginradioitaly.it/com/universalmind/tv/virgin/videoXML.xml&advXML=http://video.virginradioitaly.it/com/universalmind/adsWizzConfig/1.xml pageURL=http://www.virginradio.it swfVfy=true live=true timeout=30 flashVer=LNX 11,2,202,297'.format(streamParam[0], streamParam[1], streamParam[2]), li, False, False])
+          url = 'rtmp://{0}:1935/{1}/{2} app={1} playpath={2} swfUrl=http://video.virginradioitaly.it/com/universalmind/swf/video_player_102.swf?xmlPath=http://video.virginradioitaly.it/com/universalmind/tv/virgin/videoXML.xml&advXML=http://video.virginradioitaly.it/com/universalmind/adsWizzConfig/1.xml pageURL=http://www.virginradio.it swfVfy=true live=true timeout=30 flashVer=LNX 11,2,202,297'.format(streamParam[0], streamParam[1], streamParam[2])
+          xbmcplugin.addDirectoryItem(self._handle, url, li, False)
       for nameCat, descr, link in categs:
         li = Util.createListItem(nameCat, streamtype = 'video', infolabels = { 'title' : nameCat, 'plot' : descr })
-        items.append([{ 'id' : 's', 'page' : link }, li, True, True])
+        xbmcplugin.addDirectoryItem(self._handle, Util.formatUrl({ 'id' : 's', 'page' : link }), li, True)
 
       if (streamParam == None or not streamParam) and (response == None or not response): # Se sono vuoti oppure liste vuote.
         xbmcgui.Dialog().ok(Util._addonName, Util.getTranslation(30004)) # Errore recupero stream diretta.
 
       # Show items.
-      Util.addItems(self._handle, items)
+      xbmcplugin.endOfDirectory(self._handle)
 
     # Web radio.
     elif self._params['content_type'] == 'audio':
-      response = self._getVirginResponse('/webradio')
+      response = self._getVirginResponse('/webradio', True)
       if response != None:
         self._getWebRadio(response)
-      else:
-        Util.showConnectionErrorDialog() # Errore connessione internet!
 
 
-  def _getVirginResponse(self, link):
-    return Util('http://www.virginradio.it{0}'.format(link)).getHtml()
+  def _getVirginResponse(self, link, showErrorDialog = False):
+    return Util.getHtml('http://www.virginradio.it{0}'.format(link), showErrorDialog)
 
 
   def _getStreamParam(self, quality):
     result = None
-    response = Util('http://video.virginradioitaly.it/com/universalmind/tv/virgin/videoXML.xml').getHtml()
+    response = Util.getHtml('http://video.virginradioitaly.it/com/universalmind/tv/virgin/videoXML.xml')
     if response != None:
-      serverParam = re.compile('<serverPath value="auto\|(.+?)\|(.+?)"/>').findall(response)
-      stream = re.compile('<rate n="{0}" streamName="(.+?)" bitrate="'.format(str(quality))).findall(response)
-      result = [serverParam[0][0], serverParam[0][1], stream[0]]
+      serverParam = re.compile('auto\|(.+?)\|(.+)').findall(response.find('serverpath')['value'])
+      result = [serverParam[0][0], serverParam[0][1], response.find('rate', {'n' : str(quality)})['streamname']]
     return result
 
 
@@ -141,22 +139,24 @@ class VirginRadio(object):
     return img
 
 
-  def _showNextPageDir(self, inputString, pattern, idParams, items):
+  def _showNextPageDir(self, inputString, pattern, idParams):
     nextPage = re.compile(pattern).findall(inputString)
     if len(nextPage) > 0:
-      items.append([{ 'id' : idParams, 'page' : nextPage[0][0] }, Util.createItemPage(Util.normalizeText(nextPage[0][1])), True, True])
+      xbmcplugin.addDirectoryItem(self._handle, Util.formatUrl({ 'id' : idParams, 'page' : nextPage[0][0] }), Util.createItemPage(Util.normalizeText(nextPage[0][1])), True)
 
 
   def _getWebRadio(self, response):
-    rList = re.compile('<img width="70" height="70" src="(.+?)".+?/> <a href="(.+?)">(.+?)</a>').findall(response)
+    radios = response.findAll('li', 'section-mood')
     #rList = re.compile('<img width="70" height="70" src="(.+?)".+?/> <a href="(.+?)">(.+?)</a> <p><p>(.+?)</p>').findall(response)
-    items = []
-    for img, link, title in rList:
-      title = Util.normalizeText(title)
-      li = Util.createListItem(title, thumbnailImage = img.replace('-70x70', ''), streamtype = 'music', infolabels = { 'title' : title }, isPlayable = True)
-      items.append([{ 'id' : 'r', 'page' : link.replace('http://www.virginradio.it', '') }, li, False, True])
-    self._showNextPageDir(response, "<span class='page-numbers current'>.+?</span><a class='page-numbers' href='(.+?)'>(.+?)</a>", 't', items)
-    Util.addItems(self._handle, items)
+    for radio in radios:
+      title = Util.normalizeText(radio.a.text)
+      img = radio.img['src']
+      subStr = img[img.rfind('-'):img.rfind('.')]
+      li = Util.createListItem(title, thumbnailImage = img.replace(subStr, ''), streamtype = 'music', infolabels = { 'title' : title }, isPlayable = True)
+      url = Util.formatUrl({ 'id' : 'r', 'page' : radio.a['href'].replace('http://www.virginradio.it', '') })
+      xbmcplugin.addDirectoryItem(self._handle, url, li, False)
+    self._showNextPageDir(response.renderContents(), '<span class="page-numbers current">.+?</span><a class="page-numbers" href="(.+?)">(.+?)</a>', 't')
+    xbmcplugin.endOfDirectory(self._handle)
 
 
 # Entry point.
