@@ -1,3 +1,7 @@
+[B]Version 1.0.7[/B]
+- Replaced dialog boxes with notifications.
+- Small bugfix/improvements.
+
 [B]Version 1.0.6[/B]
 - Updated code to the site changes.
 - Added menu Video/Audio.
