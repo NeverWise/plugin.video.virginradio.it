@@ -1,3 +1,8 @@
+[B]Version 1.0.8[/B]
+- Improved radio and video section.
+- Added podcast and pictures section.
+- Added the ability to download videos through ffmpeg.
+
 [B]Version 1.0.7[/B]
 - Replaced dialog boxes with notifications.
 - Small bugfix/improvements.
